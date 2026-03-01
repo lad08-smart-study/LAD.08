@@ -1,72 +1,1843 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr" dir="ltr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light dark" />
-  <title>LOK.A.D.08</title>
-  <link rel="stylesheet" href="assets/styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOK.A.D.08 - Study Planner</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --card: #101a30;
+            --text: #e8eefc;
+            --muted: #a9b7d6;
+            --line: #223155;
+            --accent: #6ea8fe;
+            --success: #4ade80;
+            --warning: #fbbf24;
+            --danger: #f87171;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Navigation */
+        .nav {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .nav-brand {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .nav-link {
+            color: var(--text);
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.3s;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1rem;
+        }
+        
+        .nav-link:hover, .nav-link.active {
+            background: var(--line);
+            color: var(--accent);
+        }
+        
+        .nav-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        /* Cards */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            color: var(--accent);
+        }
+        
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        /* Forms */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 15px;
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg);
+        }
+        
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--line);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--line);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: #064e3b;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: #450a0a;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: #451a03;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.875rem;
+        }
+        
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--line);
+        }
+        
+        th {
+            color: var(--muted);
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+        }
+        
+        tr:hover {
+            background: rgba(110, 168, 254, 0.05);
+        }
+        
+        /* Status badges */
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .badge-not_started {
+            background: var(--line);
+            color: var(--muted);
+        }
+        
+        .badge-studying {
+            background: rgba(251, 191, 36, 0.2);
+            color: var(--warning);
+        }
+        
+        .badge-done {
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--success);
+        }
+        
+        .badge-review {
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--danger);
+        }
+        
+        /* Progress bars */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--line);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.3s;
+        }
+        
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        
+        .stat-label {
+            color: var(--muted);
+            font-size: 0.875rem;
+            margin-top: 5px;
+        }
+        
+        /* Pomodoro */
+        .pomodoro-container {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .timer-display {
+            font-size: 5rem;
+            font-weight: bold;
+            color: var(--accent);
+            font-variant-numeric: tabular-nums;
+            margin: 20px 0;
+        }
+        
+        .timer-phase {
+            font-size: 1.25rem;
+            color: var(--muted);
+            margin-bottom: 20px;
+        }
+        
+        .timer-controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        /* Planner */
+        .planner-day {
+            background: var(--bg);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .planner-day-header {
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .planner-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: var(--card);
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .planner-item.study { border-left: 3px solid var(--accent); }
+        .planner-item.mcq { border-left: 3px solid var(--warning); }
+        .planner-item.review { border-left: 3px solid var(--danger); }
+        
+        /* Auth */
+        .auth-container {
+            max-width: 400px;
+            margin: 100px auto;
+        }
+        
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .auth-tab {
+            flex: 1;
+            padding: 12px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            color: var(--text);
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .auth-tab.active {
+            background: var(--accent);
+            color: var(--bg);
+            border-color: var(--accent);
+        }
+        
+        /* RTL Support */
+        [dir="rtl"] .nav-links {
+            flex-direction: row-reverse;
+        }
+        
+        [dir="rtl"] th, [dir="rtl"] td {
+            text-align: right;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .nav-links {
+                justify-content: center;
+            }
+            
+            .timer-display {
+                font-size: 3rem;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast.success { border-left: 4px solid var(--success); }
+        .toast.error { border-left: 4px solid var(--danger); }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--muted);
+        }
+    </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="brand-row">
-        <div class="logo" aria-label="LOK.A.D.08">LOK.A.D.08</div>
-        <div class="tagline" data-i18n="tagline">Plateforme d'étude gratuite pour étudiants en médecine</div>
-      </div>
-      <div class="muted small" data-i18n="tagline2">Units → Subjects → Lessons • Pomodoro • Spaced repetition • Planner • AI (server mode)</div>
+    <div id="app">
+        <div class="loading">Chargement...</div>
     </div>
 
-    <div class="top-actions">
-      <div class="lang-switch" role="group" aria-label="Language">
-        <button class="chip" type="button" data-lang="fr">FR</button>
-        <button class="chip" type="button" data-lang="en">EN</button>
-        <button class="chip" type="button" data-lang="ar">AR</button>
-      </div>
-      <div id="userBadge" class="user-badge hidden" aria-live="polite"></div>
-      <button id="logoutBtn" class="btn btn-outline hidden" type="button" data-i18n="logout">Déconnexion</button>
-    </div>
-  </header>
-
-  <nav id="nav" class="nav hidden" aria-label="Primary">
-    <a href="#dashboard" data-route="dashboard" class="navlink" data-i18n="nav_dashboard">Dashboard</a>
-    <a href="#workspace" data-route="workspace" class="navlink" data-i18n="nav_workspace">Workspace</a>
-    <a href="#planner" data-route="planner" class="navlink" data-i18n="nav_planner">Planner</a>
-    <a href="#reviews" data-route="reviews" class="navlink" data-i18n="nav_reviews">Reviews</a>
-    <a href="#pomodoro" data-route="pomodoro" class="navlink" data-i18n="nav_pomodoro">Pomodoro</a>
-    <a href="#ai" data-route="ai" class="navlink" data-i18n="nav_ai">AI Assistant</a>
-    <a href="#settings" data-route="settings" class="navlink" data-i18n="nav_settings">Settings</a>
-  </nav>
-
-  <main id="main" class="main" role="main"></main>
-
-  <footer class="footer">
-    <div class="small muted">
-      <span class="mono">LOK.A.D.08</span> • Static MVP • Data saved locally in your browser
-    </div>
-  </footer>
-
-  <!-- Modal -->
-  <div id="modalRoot" class="modal-root hidden" role="dialog" aria-modal="true" aria-label="Dialog">
-    <div class="modal" role="document">
-      <div class="modal-header">
-        <div id="modalTitle" class="modal-title">Dialog</div>
-        <button id="modalClose" class="icon-btn" type="button" aria-label="Close">✕</button>
-      </div>
-      <div id="modalBody" class="modal-body"></div>
-      <div id="modalActions" class="modal-actions"></div>
-    </div>
-  </div>
-
-  <noscript>
-    <div class="container">
-      <div class="card">
-        <h2>JavaScript required</h2>
-        <p>This app is a client-side SPA and needs JavaScript enabled.</p>
-      </div>
-    </div>
-  </noscript>
-
-  <script src="assets/app.js" defer></script>
+    <script>
+        // ==================== DATABASE (IndexedDB) ====================
+        const DB_NAME = 'Lokad08DB';
+        const DB_VERSION = 1;
+        
+        class Database {
+            constructor() {
+                this.db = null;
+            }
+            
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(DB_NAME, DB_VERSION);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        resolve();
+                    };
+                    
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        
+                        if (!db.objectStoreNames.contains('users')) {
+                            const usersStore = db.createObjectStore('users', { keyPath: 'id', autoIncrement: true });
+                            usersStore.createIndex('email', 'email', { unique: true });
+                        }
+                        
+                        if (!db.objectStoreNames.contains('units')) {
+                            db.createObjectStore('units', { keyPath: 'id', autoIncrement: true });
+                        }
+                        
+                        if (!db.objectStoreNames.contains('subjects')) {
+                            db.createObjectStore('subjects', { keyPath: 'id', autoIncrement: true });
+                        }
+                        
+                        if (!db.objectStoreNames.contains('lessons')) {
+                            db.createObjectStore('lessons', { keyPath: 'id', autoIncrement: true });
+                        }
+                        
+                        if (!db.objectStoreNames.contains('reviews')) {
+                            const reviewsStore = db.createObjectStore('reviews', { keyPath: 'id', autoIncrement: true });
+                            reviewsStore.createIndex('due_date', 'due_date', { unique: false });
+                        }
+                        
+                        if (!db.objectStoreNames.contains('pomodoro')) {
+                            db.createObjectStore('pomodoro', { keyPath: 'id', autoIncrement: true });
+                        }
+                        
+                        if (!db.objectStoreNames.contains('planner_settings')) {
+                            db.createObjectStore('planner_settings', { keyPath: 'id', autoIncrement: true });
+                        }
+                        
+                        if (!db.objectStoreNames.contains('planner_items')) {
+                            db.createObjectStore('planner_items', { keyPath: 'id', autoIncrement: true });
+                        }
+                    };
+                });
+            }
+            
+            async add(storeName, data) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.add(data);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+            
+            async get(storeName, id) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.get(id);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+            
+            async getAll(storeName) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.getAll();
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+            
+            async update(storeName, data) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.put(data);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+            
+            async delete(storeName, id) {
+                return new Promise((resolve, reject) => {
+                    const transaction = this.db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.delete(id);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        }
+        
+        const db = new Database();
+        
+        // ==================== AUTHENTICATION ====================
+        class Auth {
+            constructor() {
+                this.currentUser = null;
+                this.loadSession();
+            }
+            
+            loadSession() {
+                const session = localStorage.getItem('lokad08_session');
+                if (session) {
+                    this.currentUser = JSON.parse(session);
+                }
+            }
+            
+            async register(email, password) {
+                const users = await db.getAll('users');
+                if (users.find(u => u.email === email)) {
+                    throw new Error('Email already exists');
+                }
+                
+                const hashedPassword = await this.hashPassword(password);
+                const userId = await db.add('users', {
+                    email,
+                    password_hash: hashedPassword,
+                    name: null,
+                    year: null,
+                    created_at: new Date().toISOString()
+                });
+                
+                await db.add('planner_settings', {
+                    user_id: userId,
+                    free_hours_mon: 2,
+                    free_hours_tue: 2,
+                    free_hours_wed: 2,
+                    free_hours_thu: 2,
+                    free_hours_fri: 2,
+                    free_hours_sat: 3,
+                    free_hours_sun: 3,
+                    exam_date: null
+                });
+                
+                return this.login(email, password);
+            }
+            
+            async login(email, password) {
+                const users = await db.getAll('users');
+                const user = users.find(u => u.email === email);
+                
+                if (!user) throw new Error('User not found');
+                
+                const valid = await this.verifyPassword(password, user.password_hash);
+                if (!valid) throw new Error('Invalid password');
+                
+                this.currentUser = { id: user.id, email: user.email, name: user.name, year: user.year };
+                localStorage.setItem('lokad08_session', JSON.stringify(this.currentUser));
+                return this.currentUser;
+            }
+            
+            logout() {
+                this.currentUser = null;
+                localStorage.removeItem('lokad08_session');
+            }
+            
+            async updateProfile(name, year) {
+                if (!this.currentUser) throw new Error('Not authenticated');
+                
+                const user = await db.get('users', this.currentUser.id);
+                user.name = name;
+                user.year = year;
+                await db.update('users', user);
+                
+                this.currentUser.name = name;
+                this.currentUser.year = year;
+                localStorage.setItem('lokad08_session', JSON.stringify(this.currentUser));
+                return this.currentUser;
+            }
+            
+            async hashPassword(password) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(password);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+            
+            async verifyPassword(password, hash) {
+                const hashed = await this.hashPassword(password);
+                return hashed === hash;
+            }
+        }
+        
+        const auth = new Auth();
+        
+        // ==================== I18N ====================
+        const i18n = {
+            fr: {
+                appName: "LOK.A.D.08",
+                login: "Connexion",
+                register: "Créer un compte",
+                email: "Email",
+                password: "Mot de passe",
+                logout: "Déconnexion",
+                profile: "Profil",
+                name: "Nom",
+                year: "Année (1-6)",
+                save: "Enregistrer",
+                dashboard: "Tableau de bord",
+                workspace: "Workspace",
+                units: "Unités",
+                subjects: "Matières",
+                lessons: "Leçons",
+                planner: "Planner",
+                pomodoro: "Pomodoro",
+                progress: "Progression",
+                add: "Ajouter",
+                title: "Titre",
+                standaloneSubject: "Matière indépendante",
+                unitOptional: "Unité (optionnel)",
+                subjectRequired: "Matière (obligatoire)",
+                status: "Statut",
+                not_started: "Pas commencé",
+                studying: "En cours",
+                done: "Terminé",
+                content: "Contenu (texte)",
+                update: "Mettre à jour",
+                delete: "Supprimer",
+                generate: "Générer",
+                freeHours: "Heures libres",
+                examDate: "Date d'examen",
+                dueToday: "À réviser aujourd'hui",
+                markDone: "Marquer comme fait",
+                start: "Démarrer",
+                stop: "Arrêter",
+                mode: "Mode",
+                sessionSaved: "Session enregistrée",
+                weeklyPlan: "Plan de 7 jours",
+                noData: "Aucune donnée",
+                total: "Total",
+                completed: "Terminé",
+                remaining: "Restant",
+                study: "Étude",
+                review: "Révision",
+                mcq: "QCM",
+                minutes: "minutes",
+                history: "Historique",
+                confirmDelete: "Confirmer la suppression ?",
+                welcome: "Bienvenue",
+                loading: "Chargement..."
+            },
+            en: {
+                appName: "LOK.A.D.08",
+                login: "Login",
+                register: "Create account",
+                email: "Email",
+                password: "Password",
+                logout: "Logout",
+                profile: "Profile",
+                name: "Name",
+                year: "Year (1-6)",
+                save: "Save",
+                dashboard: "Dashboard",
+                workspace: "Workspace",
+                units: "Units",
+                subjects: "Subjects",
+                lessons: "Lessons",
+                planner: "Planner",
+                pomodoro: "Pomodoro",
+                progress: "Progress",
+                add: "Add",
+                title: "Title",
+                standaloneSubject: "Standalone subject",
+                unitOptional: "Unit (optional)",
+                subjectRequired: "Subject (required)",
+                status: "Status",
+                not_started: "Not started",
+                studying: "Studying",
+                done: "Done",
+                content: "Content (text)",
+                update: "Update",
+                delete: "Delete",
+                generate: "Generate",
+                freeHours: "Free hours",
+                examDate: "Exam date",
+                dueToday: "Due reviews",
+                markDone: "Mark done",
+                start: "Start",
+                stop: "Stop",
+                mode: "Mode",
+                sessionSaved: "Session saved",
+                weeklyPlan: "7-day plan",
+                noData: "No data",
+                total: "Total",
+                completed: "Completed",
+                remaining: "Remaining",
+                study: "Study",
+                review: "Review",
+                mcq: "MCQ",
+                minutes: "minutes",
+                history: "History",
+                confirmDelete: "Confirm deletion?",
+                welcome: "Welcome",
+                loading: "Loading..."
+            },
+            ar: {
+                appName: "LOK.A.D.08",
+                login: "تسجيل الدخول",
+                register: "إنشاء حساب",
+                email: "البريد الإلكتروني",
+                password: "كلمة المرور",
+                logout: "تسجيل الخروج",
+                profile: "الملف الشخصي",
+                name: "الاسم",
+                year: "السنة (1-6)",
+                save: "حفظ",
+                dashboard: "لوحة التحكم",
+                workspace: "مساحة العمل",
+                units: "الوحدات",
+                subjects: "المواد",
+                lessons: "الدروس",
+                planner: "المخطط",
+                pomodoro: "بومودورو",
+                progress: "التقدم",
+                add: "إضافة",
+                title: "العنوان",
+                standaloneSubject: "مادة مستقلة",
+                unitOptional: "الوحدة (اختياري)",
+                subjectRequired: "المادة (إجباري)",
+                status: "الحالة",
+                not_started: "لم يبدأ",
+                studying: "يدرس",
+                done: "منجز",
+                content: "المحتوى (نص)",
+                update: "تحديث",
+                delete: "حذف",
+                generate: "توليد",
+                freeHours: "ساعات الفراغ",
+                examDate: "تاريخ الامتحان",
+                dueToday: "مراجعات مستحقة اليوم",
+                markDone: "تمت المراجعة",
+                start: "ابدأ",
+                stop: "أوقف",
+                mode: "النمط",
+                sessionSaved: "تم حفظ الجلسة",
+                weeklyPlan: "خطة 7 أيام",
+                noData: "لا توجد بيانات",
+                total: "الإجمالي",
+                completed: "المكتمل",
+                remaining: "المتبقي",
+                study: "دراسة",
+                review: "مراجعة",
+                mcq: "اختيار من متعدد",
+                minutes: "دقيقة",
+                history: "السجل",
+                confirmDelete: "تأكيد الحذف؟",
+                welcome: "أهلاً بك",
+                loading: "جاري التحميل..."
+            }
+        };
+        
+        let currentLang = localStorage.getItem('lokad08_lang') || 'fr';
+        
+        function t(key) {
+            return i18n[currentLang][key] || i18n.en[key] || key;
+        }
+        
+        function setLang(lang) {
+            currentLang = lang;
+            localStorage.setItem('lokad08_lang', lang);
+            document.documentElement.lang = lang;
+            document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+            render();
+        }
+        
+        // ==================== UTILS ====================
+        function todayISO() {
+            const d = new Date();
+            return d.toISOString().split('T')[0];
+        }
+        
+        function addDaysISO(dateISO, days) {
+            const d = new Date(dateISO);
+            d.setDate(d.getDate() + days);
+            return d.toISOString().split('T')[0];
+        }
+        
+        function formatDate(dateISO) {
+            const options = { weekday: 'short', month: 'short', day: 'numeric' };
+            return new Date(dateISO).toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : currentLang === 'fr' ? 'fr-FR' : 'en-US', options);
+        }
+        
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        // ==================== DATA OPERATIONS ====================
+        async function getUserData() {
+            if (!auth.currentUser) return null;
+            const userId = auth.currentUser.id;
+            
+            const [units, subjects, lessons, reviews, pomodoro, plannerSettings] = await Promise.all([
+                db.getAll('units'),
+                db.getAll('subjects'),
+                db.getAll('lessons'),
+                db.getAll('reviews'),
+                db.getAll('pomodoro'),
+                db.getAll('planner_settings')
+            ]);
+            
+            return {
+                units: units.filter(u => u.user_id === userId),
+                subjects: subjects.filter(s => s.user_id === userId),
+                lessons: lessons.filter(l => l.user_id === userId),
+                reviews: reviews.filter(r => r.user_id === userId),
+                pomodoro: pomodoro.filter(p => p.user_id === userId),
+                plannerSettings: plannerSettings.find(p => p.user_id === userId)
+            };
+        }
+        
+        async function createReviewSchedule(lessonId) {
+            const userId = auth.currentUser.id;
+            const base = todayISO();
+            const offsets = [1, 3, 7, 14];
+            
+            for (const offset of offsets) {
+                await db.add('reviews', {
+                    user_id: userId,
+                    lesson_id: lessonId,
+                    due_date: addDaysISO(base, offset),
+                    done: 0,
+                    created_at: new Date().toISOString()
+                });
+            }
+        }
+        
+        // ==================== RENDER FUNCTIONS ====================
+        let currentPage = 'dashboard';
+        
+        async function render() {
+            const app = document.getElementById('app');
+            
+            if (!auth.currentUser) {
+                app.innerHTML = renderAuth();
+                attachAuthListeners();
+                return;
+            }
+            
+            // Render nav immediately
+            app.innerHTML = renderNav() + '<div class="container" id="pageContainer"><div class="loading">' + t('loading') + '</div></div>';
+            
+            // Then render page content asynchronously
+            const pageContent = await renderPage();
+            document.getElementById('pageContainer').innerHTML = pageContent;
+            
+            attachNavListeners();
+            attachPageListeners();
+        }
+        
+        function renderAuth() {
+            return `
+                <div class="auth-container">
+                    <div class="card">
+                        <h1 style="text-align: center; color: var(--accent); margin-bottom: 20px;">${t('appName')}</h1>
+                        <div class="auth-tabs">
+                            <button class="auth-tab active" onclick="switchAuthTab('login')">${t('login')}</button>
+                            <button class="auth-tab" onclick="switchAuthTab('register')">${t('register')}</button>
+                        </div>
+                        <form id="authForm">
+                            <div class="form-group">
+                                <label>${t('email')}</label>
+                                <input type="email" id="authEmail" required>
+                            </div>
+                            <div class="form-group">
+                                <label>${t('password')}</label>
+                                <input type="password" id="authPassword" required minlength="6">
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                <span id="authSubmitText">${t('login')}</span>
+                            </button>
+                        </form>
+                        <div style="margin-top: 15px; text-align: center;">
+                            <select onchange="setLang(this.value)" style="width: auto; display: inline-block;">
+                                <option value="fr" ${currentLang === 'fr' ? 'selected' : ''}>Français</option>
+                                <option value="en" ${currentLang === 'en' ? 'selected' : ''}>English</option>
+                                <option value="ar" ${currentLang === 'ar' ? 'selected' : ''}>العربية</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderNav() {
+            const pages = [
+                { id: 'dashboard', label: t('dashboard') },
+                { id: 'workspace', label: t('workspace') },
+                { id: 'planner', label: t('planner') },
+                { id: 'pomodoro', label: t('pomodoro') },
+                { id: 'profile', label: t('profile') }
+            ];
+            
+            return `
+                <div class="container">
+                    <nav class="nav">
+                        <div class="nav-brand">${t('appName')}</div>
+                        <div class="nav-links">
+                            ${pages.map(p => `
+                                <button class="nav-link ${currentPage === p.id ? 'active' : ''}" 
+                                   onclick="navigateTo('${p.id}')">
+                                    ${p.label}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <div class="nav-controls">
+                            <select onchange="setLang(this.value)" class="input" style="width: auto;">
+                                <option value="fr" ${currentLang === 'fr' ? 'selected' : ''}>FR</option>
+                                <option value="en" ${currentLang === 'en' ? 'selected' : ''}>EN</option>
+                                <option value="ar" ${currentLang === 'ar' ? 'selected' : ''}>AR</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="logout()">${t('logout')}</button>
+                        </div>
+                    </nav>
+                </div>
+            `;
+        }
+        
+        async function renderPage() {
+            switch(currentPage) {
+                case 'dashboard': return await renderDashboard();
+                case 'workspace': return await renderWorkspace();
+                case 'planner': return await renderPlanner();
+                case 'pomodoro': return renderPomodoro();
+                case 'profile': return renderProfile();
+                default: return await renderDashboard();
+            }
+        }
+        
+        async function renderDashboard() {
+            const data = await getUserData();
+            const totalLessons = data.lessons.length;
+            const doneLessons = data.lessons.filter(l => l.status === 'done').length;
+            const progress = totalLessons ? Math.round((doneLessons / totalLessons) * 100) : 0;
+            
+            const today = todayISO();
+            const dueReviews = data.reviews.filter(r => !r.done && r.due_date <= today).slice(0, 10);
+            
+            const subjectStats = data.subjects.map(subject => {
+                const subjectLessons = data.lessons.filter(l => l.subject_id === subject.id);
+                const done = subjectLessons.filter(l => l.status === 'done').length;
+                return {
+                    ...subject,
+                    total: subjectLessons.length,
+                    done: done,
+                    progress: subjectLessons.length ? Math.round((done / subjectLessons.length) * 100) : 0
+                };
+            });
+            
+            return `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${progress}%</div>
+                        <div class="stat-label">${t('progress')}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${progress}%"></div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${totalLessons}</div>
+                        <div class="stat-label">${t('total')} ${t('lessons')}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${doneLessons}</div>
+                        <div class="stat-label">${t('completed')}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${dueReviews.length}</div>
+                        <div class="stat-label">${t('dueToday')}</div>
+                    </div>
+                </div>
+                
+                <div class="grid">
+                    <div class="card">
+                        <h2 class="card-title">${t('dueToday')}</h2>
+                        ${dueReviews.length === 0 ? 
+                            `<p class="small" style="color: var(--muted);">${t('noData')}</p>` :
+                            `<div class="table-container">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>${t('title')}</th>
+                                            <th>${t('status')}</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${dueReviews.map(r => {
+                                            const lesson = data.lessons.find(l => l.id === r.lesson_id);
+                                            return `
+                                                <tr>
+                                                    <td>${lesson ? lesson.title : 'Unknown'}</td>
+                                                    <td><span class="badge badge-review">${r.due_date}</span></td>
+                                                    <td>
+                                                        <button class="btn btn-success btn-sm" onclick="markReviewDone(${r.id})">
+                                                            ${t('markDone')}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>`
+                        }
+                    </div>
+                    
+                    <div class="card">
+                        <h2 class="card-title">${t('subjects')} ${t('progress')}</h2>
+                        ${subjectStats.length === 0 ?
+                            `<p class="small" style="color: var(--muted);">${t('noData')}</p>` :
+                            `<div style="max-height: 400px; overflow-y: auto;">
+                                ${subjectStats.map(s => `
+                                    <div style="margin-bottom: 15px;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                            <span>${s.title}</span>
+                                            <span class="small">${s.done}/${s.total} (${s.progress}%)</span>
+                                        </div>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" style="width: ${s.progress}%"></div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>`
+                        }
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function renderWorkspace() {
+            const data = await getUserData();
+            
+            return `
+                <div class="grid">
+                    <!-- Units -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">${t('units')}</h2>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="unitTitle" placeholder="${t('title')}" class="input">
+                        </div>
+                        <button class="btn btn-primary" onclick="addUnit()">${t('add')}</button>
+                        
+                        <div class="table-container" style="margin-top: 15px;">
+                            <table>
+                                <tbody>
+                                    ${data.units.map(u => `
+                                        <tr>
+                                            <td>
+                                                <input type="text" value="${u.title}" 
+                                                    onblur="updateUnit(${u.id}, this.value)"
+                                                    class="input" style="margin: 0;">
+                                            </td>
+                                            <td style="width: 40px;">
+                                                <button class="btn btn-danger btn-sm" onclick="deleteUnit(${u.id})">×</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Subjects -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">${t('subjects')}</h2>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="subjectTitle" placeholder="${t('title')}" class="input">
+                        </div>
+                        <div class="form-group">
+                            <select id="subjectUnit" class="input">
+                                <option value="">${t('standaloneSubject')}</option>
+                                ${data.units.map(u => `<option value="${u.id}">${u.title}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="addSubject()">${t('add')}</button>
+                        
+                        <div class="table-container" style="margin-top: 15px;">
+                            <table>
+                                <tbody>
+                                    ${data.subjects.map(s => `
+                                        <tr>
+                                            <td>
+                                                <input type="text" value="${s.title}" 
+                                                    onblur="updateSubject(${s.id}, this.value, ${s.unit_id || 'null'})"
+                                                    class="input" style="margin: 0;">
+                                                ${s.unit_id ? `<div class="small" style="color: var(--muted);">${data.units.find(u => u.id === s.unit_id)?.title || ''}</div>` : ''}
+                                            </td>
+                                            <td style="width: 40px;">
+                                                <button class="btn btn-danger btn-sm" onclick="deleteSubject(${s.id})">×</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Lessons -->
+                    <div class="card" style="grid-column: 1 / -1;">
+                        <div class="card-header">
+                            <h2 class="card-title">${t('lessons')}</h2>
+                        </div>
+                        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                            <div class="form-group">
+                                <input type="text" id="lessonTitle" placeholder="${t('title')}" class="input">
+                            </div>
+                            <div class="form-group">
+                                <select id="lessonSubject" class="input">
+                                    <option value="">-- ${t('subjectRequired')} --</option>
+                                    ${data.subjects.map(s => `<option value="${s.id}">${s.title}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <button class="btn btn-primary" onclick="addLesson()" style="margin-top: 24px;">${t('add')}</button>
+                            </div>
+                        </div>
+                        
+                        <div class="table-container" style="margin-top: 15px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>${t('title')}</th>
+                                        <th>${t('subjectRequired')}</th>
+                                        <th>${t('status')}</th>
+                                        <th>${t('content')}</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.lessons.map(l => {
+                                        const subject = data.subjects.find(s => s.id === l.subject_id);
+                                        return `
+                                            <tr>
+                                                <td>${l.title}</td>
+                                                <td>${subject ? subject.title : '-'}</td>
+                                                <td>
+                                                    <select onchange="updateLessonStatus(${l.id}, this.value)" class="input" style="width: auto;">
+                                                        <option value="not_started" ${l.status === 'not_started' ? 'selected' : ''}>${t('not_started')}</option>
+                                                        <option value="studying" ${l.status === 'studying' ? 'selected' : ''}>${t('studying')}</option>
+                                                        <option value="done" ${l.status === 'done' ? 'selected' : ''}>${t('done')}</option>
+                                                    </select>
+                                                </td>
+                                                <td>
+                                                    <details>
+                                                        <summary class="small" style="color: var(--muted); cursor: pointer;">${t('content')}</summary>
+                                                        <textarea onblur="updateLessonContent(${l.id}, this.value)" 
+                                                            class="input" rows="3" style="margin-top: 5px;">${l.content_text || ''}</textarea>
+                                                    </details>
+                                                </td>
+                                                <td style="width: 40px;">
+                                                    <button class="btn btn-danger btn-sm" onclick="deleteLesson(${l.id})">×</button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function renderPlanner() {
+            const data = await getUserData();
+            const settings = data.plannerSettings || {};
+            
+            const today = todayISO();
+            const end = addDaysISO(today, 7);
+            const plannerItems = await db.getAll('planner_items');
+            const weekItems = plannerItems.filter(p => p.user_id === auth.currentUser.id && p.date >= today && p.date < end);
+            
+            const grouped = {};
+            for (let i = 0; i < 7; i++) {
+                const date = addDaysISO(today, i);
+                grouped[date] = weekItems.filter(w => w.date === date);
+            }
+            
+            return `
+                <div class="grid">
+                    <div class="card">
+                        <h2 class="card-title">${t('planner')} ${t('settings')}</h2>
+                        <div class="form-group">
+                            <label>${t('examDate')}</label>
+                            <input type="date" id="examDate" value="${settings.exam_date || ''}" class="input">
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                            ${['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((day, idx) => `
+                                <div class="form-group">
+                                    <label>${t('freeHours')} ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][idx]}</label>
+                                    <input type="number" id="freeHours_${day}" value="${settings[`free_hours_${day}`] || 2}" 
+                                        min="0" max="24" step="0.5" class="input">
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="savePlannerSettings()">${t('save')}</button>
+                            <button class="btn btn-secondary" onclick="generatePlan()">${t('generate')}</button>
+                        </div>
+                    </div>
+                    
+                    <div class="card" style="grid-column: 1 / -1;">
+                        <h2 class="card-title">${t('weeklyPlan')}</h2>
+                        ${Object.keys(grouped).length === 0 || weekItems.length === 0 ?
+                            `<p class="small" style="color: var(--muted);">${t('noData')} - ${t('generate')} ${t('weeklyPlan')}</p>` :
+                            Object.entries(grouped).map(([date, items]) => `
+                                <div class="planner-day">
+                                    <div class="planner-day-header">
+                                        <span>${formatDate(date)}</span>
+                                        <span class="small">${items.reduce((a, b) => a + b.minutes, 0)} ${t('minutes')}</span>
+                                    </div>
+                                    ${items.length === 0 ? 
+                                        `<p class="small" style="color: var(--muted);">No items</p>` :
+                                        items.map(item => `
+                                            <div class="planner-item ${item.kind}">
+                                                <span class="badge">${t(item.kind)}</span>
+                                                <span>${item.minutes}${t('minutes')}</span>
+                                                <span style="flex: 1;">${item.title || ''}</span>
+                                            </div>
+                                        `).join('')
+                                    }
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderPomodoro() {
+            setTimeout(() => {
+                loadPomodoroLessons();
+                loadPomodoroHistory();
+            }, 0);
+            
+            return `
+                <div class="grid">
+                    <div class="card">
+                        <div class="pomodoro-container">
+                            <div class="form-group" style="max-width: 200px; margin: 0 auto 20px;">
+                                <label>${t('mode')}</label>
+                                <select id="pomodoroMode" class="input" onchange="changePomodoroMode()">
+                                    <option value="25_5">25/5 ${t('minutes')}</option>
+                                    <option value="50_10">50/10 ${t('minutes')}</option>
+                                </select>
+                            </div>
+                            
+                            <div class="timer-phase" id="timerPhase">WORK</div>
+                            <div class="timer-display" id="timerDisplay">25:00</div>
+                            
+                            <div class="timer-controls">
+                                <button class="btn btn-primary btn-lg" id="startBtn" onclick="startTimer()">${t('start')}</button>
+                                <button class="btn btn-secondary btn-lg" id="stopBtn" onclick="stopTimer()" disabled>${t('stop')}</button>
+                            </div>
+                            
+                            <div style="margin-top: 20px;">
+                                <select id="pomodoroLesson" class="input" style="max-width: 300px; margin: 0 auto; display: block;">
+                                    <option value="">-- ${t('lessons')} (optional) --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2 class="card-title">${t('history')}</h2>
+                        <div id="pomodoroHistory" class="table-container">
+                            <p class="small" style="color: var(--muted);">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderProfile() {
+            const user = auth.currentUser;
+            return `
+                <div class="card" style="max-width: 600px; margin: 0 auto;">
+                    <h2 class="card-title">${t('profile')}</h2>
+                    <div class="form-group">
+                        <label>${t('email')}</label>
+                        <input type="text" value="${user.email}" disabled class="input" style="opacity: 0.6;">
+                    </div>
+                    <div class="form-group">
+                        <label>${t('name')}</label>
+                        <input type="text" id="profileName" value="${user.name || ''}" class="input">
+                    </div>
+                    <div class="form-group">
+                        <label>${t('year')}</label>
+                        <input type="number" id="profileYear" value="${user.year || ''}" min="1" max="6" class="input">
+                    </div>
+                    <button class="btn btn-primary" onclick="saveProfile()">${t('save')}</button>
+                </div>
+            `;
+        }
+        
+        // ==================== EVENT HANDLERS ====================
+        let authMode = 'login';
+        
+        function switchAuthTab(mode) {
+            authMode = mode;
+            document.querySelectorAll('.auth-tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('authSubmitText').textContent = t(mode);
+        }
+        
+        function attachAuthListeners() {
+            document.getElementById('authForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('authEmail').value;
+                const password = document.getElementById('authPassword').value;
+                
+                try {
+                    if (authMode === 'login') {
+                        await auth.login(email, password);
+                    } else {
+                        await auth.register(email, password);
+                    }
+                    showToast(t('welcome') + '!');
+                    render();
+                } catch (err) {
+                    showToast(err.message, 'error');
+                }
+            });
+        }
+        
+        function attachNavListeners() {
+            // Navigation handled by inline onclick
+        }
+        
+        function attachPageListeners() {
+            // Page specific listeners
+        }
+        
+        function navigateTo(page) {
+            currentPage = page;
+            render();
+        }
+        
+        function logout() {
+            auth.logout();
+            render();
+        }
+        
+        // ==================== CRUD OPERATIONS ====================
+        async function addUnit() {
+            const title = document.getElementById('unitTitle').value.trim();
+            if (!title) return;
+            
+            await db.add('units', {
+                user_id: auth.currentUser.id,
+                title,
+                created_at: new Date().toISOString()
+            });
+            
+            document.getElementById('unitTitle').value = '';
+            render();
+            showToast('Unit added');
+        }
+        
+        async function updateUnit(id, title) {
+            const unit = await db.get('units', id);
+            unit.title = title.trim();
+            await db.update('units', unit);
+            showToast('Updated');
+        }
+        
+        async function deleteUnit(id) {
+            if (!confirm(t('confirmDelete'))) return;
+            await db.delete('units', id);
+            render();
+        }
+        
+        async function addSubject() {
+            const title = document.getElementById('subjectTitle').value.trim();
+            const unitId = document.getElementById('subjectUnit').value;
+            
+            if (!title) return;
+            
+            await db.add('subjects', {
+                user_id: auth.currentUser.id,
+                title,
+                unit_id: unitId ? parseInt(unitId) : null,
+                created_at: new Date().toISOString()
+            });
+            
+            document.getElementById('subjectTitle').value = '';
+            render();
+            showToast('Subject added');
+        }
+        
+        async function updateSubject(id, title, unitId) {
+            const subject = await db.get('subjects', id);
+            subject.title = title.trim();
+            subject.unit_id = unitId;
+            await db.update('subjects', subject);
+        }
+        
+        async function deleteSubject(id) {
+            if (!confirm(t('confirmDelete'))) return;
+            await db.delete('subjects', id);
+            render();
+        }
+        
+        async function addLesson() {
+            const title = document.getElementById('lessonTitle').value.trim();
+            const subjectId = document.getElementById('lessonSubject').value;
+            
+            if (!title || !subjectId) return;
+            
+            await db.add('lessons', {
+                user_id: auth.currentUser.id,
+                subject_id: parseInt(subjectId),
+                title,
+                status: 'not_started',
+                content_text: null,
+                created_at: new Date().toISOString()
+            });
+            
+            document.getElementById('lessonTitle').value = '';
+            render();
+            showToast('Lesson added');
+        }
+        
+        async function updateLessonStatus(id, status) {
+            const lesson = await db.get('lessons', id);
+            
+            if (status === 'done' && lesson.status !== 'done') {
+                lesson.done_at = new Date().toISOString();
+                await createReviewSchedule(id);
+            }
+            
+            lesson.status = status;
+            await db.update('lessons', lesson);
+            render();
+        }
+        
+        async function updateLessonContent(id, content) {
+            const lesson = await db.get('lessons', id);
+            lesson.content_text = content;
+            await db.update('lessons', lesson);
+        }
+        
+        async function deleteLesson(id) {
+            if (!confirm(t('confirmDelete'))) return;
+            await db.delete('lessons', id);
+            render();
+        }
+        
+        async function markReviewDone(id) {
+            const review = await db.get('reviews', id);
+            review.done = 1;
+            review.done_at = new Date().toISOString();
+            await db.update('reviews', review);
+            render();
+            showToast('Review completed!');
+        }
+        
+        async function saveProfile() {
+            const name = document.getElementById('profileName').value;
+            const year = document.getElementById('profileYear').value;
+            await auth.updateProfile(name, year ? parseInt(year) : null);
+            showToast('Profile saved');
+        }
+        
+        // ==================== PLANNER ====================
+        async function savePlannerSettings() {
+            const settings = await db.getAll('planner_settings');
+            const userSettings = settings.find(s => s.user_id === auth.currentUser.id) || { user_id: auth.currentUser.id };
+            
+            userSettings.exam_date = document.getElementById('examDate').value || null;
+            ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].forEach(day => {
+                userSettings[`free_hours_${day}`] = parseFloat(document.getElementById(`freeHours_${day}`).value) || 0;
+            });
+            
+            if (userSettings.id) {
+                await db.update('planner_settings', userSettings);
+            } else {
+                await db.add('planner_settings', userSettings);
+            }
+            
+            showToast('Settings saved');
+        }
+        
+        async function generatePlan() {
+            const data = await getUserData();
+            const settings = data.plannerSettings;
+            
+            if (!settings) {
+                showToast('Please save settings first', 'error');
+                return;
+            }
+            
+            const today = todayISO();
+            const end = addDaysISO(today, 7);
+            
+            const existing = await db.getAll('planner_items');
+            const toDelete = existing.filter(e => e.user_id === auth.currentUser.id && e.date >= today && e.date < end);
+            for (const item of toDelete) {
+                await db.delete('planner_items', item.id);
+            }
+            
+            const remaining = data.lessons.filter(l => l.status !== 'done');
+            const dueReviews = data.reviews.filter(r => !r.done && r.due_date >= today && r.due_date < end);
+            
+            const reviewsByDate = {};
+            dueReviews.forEach(r => {
+                if (!reviewsByDate[r.due_date]) reviewsByDate[r.due_date] = [];
+                reviewsByDate[r.due_date].push(r);
+            });
+            
+            const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+            const lessonQueue = [...remaining];
+            
+            for (let i = 0; i < 7; i++) {
+                const date = addDaysISO(today, i);
+                const dow = new Date(date).getDay();
+                const dayKey = dayNames[dow];
+                const freeHours = settings[`free_hours_${dayKey}`] || 0;
+                let minutes = Math.round(freeHours * 60);
+                
+                if (minutes <= 0) continue;
+                
+                const reviewsToday = reviewsByDate[date] || [];
+                const reviewBudget = reviewsToday.length > 0 ? Math.round(minutes * 0.2) : 0;
+                const mcqBudget = Math.round(minutes * 0.2);
+                let studyBudget = minutes - reviewBudget - mcqBudget;
+                
+                let rb = reviewBudget;
+                for (const review of reviewsToday) {
+                    if (rb <= 0) break;
+                    const lesson = data.lessons.find(l => l.id === review.lesson_id);
+                    const mins = Math.min(25, rb);
+                    await db.add('planner_items', {
+                        user_id: auth.currentUser.id,
+                        date,
+                        kind: 'review',
+                        minutes: mins,
+                        title: `Review: ${lesson ? lesson.title : 'Unknown'}`,
+                        ref_lesson_id: review.lesson_id,
+                        created_at: new Date().toISOString()
+                    });
+                    rb -= mins;
+                }
+                
+                let mb = mcqBudget;
+                while (mb >= 25) {
+                    await db.add('planner_items', {
+                        user_id: auth.currentUser.id,
+                        date,
+                        kind: 'mcq',
+                        minutes: 25,
+                        title: 'MCQ Practice',
+                        created_at: new Date().toISOString()
+                    });
+                    mb -= 25;
+                }
+                if (mb > 0) {
+                    await db.add('planner_items', {
+                        user_id: auth.currentUser.id,
+                        date,
+                        kind: 'mcq',
+                        minutes: mb,
+                        title: 'MCQ Practice',
+                        created_at: new Date().toISOString()
+                    });
+                }
+                
+                while (studyBudget > 0 && lessonQueue.length > 0) {
+                    const chunk = Math.min(50, studyBudget);
+                    const lesson = lessonQueue[0];
+                    await db.add('planner_items', {
+                        user_id: auth.currentUser.id,
+                        date,
+                        kind: 'study',
+                        minutes: chunk,
+                        title: `Study: ${lesson.title}`,
+                        ref_lesson_id: lesson.id,
+                        created_at: new Date().toISOString()
+                    });
+                    studyBudget -= chunk;
+                    if (chunk >= 50) lessonQueue.shift();
+                }
+            }
+            
+            render();
+            showToast('Plan generated!');
+        }
+        
+        // ==================== POMODORO ====================
+        let timerInterval = null;
+        let timerSeconds = 25 * 60;
+        let timerPhase = 'work';
+        let timerRunning = false;
+        let timerStartedAt = null;
+        let currentMode = '25_5';
+        
+        async function loadPomodoroLessons() {
+            const data = await getUserData();
+            const select = document.getElementById('pomodoroLesson');
+            if (!select) return;
+            select.innerHTML = '<option value="">-- ' + t('lessons') + ' (optional) --</option>' +
+                data.lessons.map(l => `<option value="${l.id}">${l.title}</option>`).join('');
+        }
+        
+        async function loadPomodoroHistory() {
+            const data = await getUserData();
+            const history = data.pomodoro.slice(-10).reverse();
+            
+            const container = document.getElementById('pomodoroHistory');
+            if (!container) return;
+            
+            if (history.length === 0) {
+                container.innerHTML = '<p class="small" style="color: var(--muted);">No sessions yet</p>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mode</th>
+                            <th>Duration</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${history.map(h => `
+                            <tr>
+                                <td>${h.mode}</td>
+                                <td>${h.work_minutes} + ${h.break_minutes} min</td>
+                                <td class="small">${new Date(h.created_at).toLocaleDateString()}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        function changePomodoroMode() {
+            currentMode = document.getElementById('pomodoroMode').value;
+            const work = currentMode === '25_5' ? 25 : 50;
+            timerSeconds = work * 60;
+            updateTimerDisplay();
+            stopTimer();
+            timerPhase = 'work';
+            document.getElementById('timerPhase').textContent = 'WORK';
+        }
+        
+        function updateTimerDisplay() {
+            const mins = Math.floor(timerSeconds / 60);
+            const secs = timerSeconds % 60;
+            const display = document.getElementById('timerDisplay');
+            if (display) {
+                display.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+        }
+        
+        function startTimer() {
+            if (timerRunning) return;
+            
+            timerRunning = true;
+            if (!timerStartedAt) timerStartedAt = new Date().toISOString();
+            
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = false;
+            
+            timerInterval = setInterval(() => {
+                timerSeconds--;
+                updateTimerDisplay();
+                
+                if (timerSeconds <= 0) {
+                    handleTimerComplete();
+                }
+            }, 1000);
+        }
+        
+        function stopTimer() {
+            timerRunning = false;
+            clearInterval(timerInterval);
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+        }
+        
+        async function handleTimerComplete() {
+            const work = currentMode === '25_5' ? 25 : 50;
+            const brk = currentMode === '25_5' ? 5 : 10;
+            
+            if (timerPhase === 'work') {
+                timerPhase = 'break';
+                timerSeconds = brk * 60;
+                const phaseEl = document.getElementById('timerPhase');
+                if (phaseEl) phaseEl.textContent = 'BREAK';
+                updateTimerDisplay();
+                showToast('Work done! Take a break.');
+            } else {
+                stopTimer();
+                const endedAt = new Date().toISOString();
+                const lessonSelect = document.getElementById('pomodoroLesson');
+                const lessonId = lessonSelect ? lessonSelect.value : '';
+                
+                await db.add('pomodoro', {
+                    user_id: auth.currentUser.id,
+                    lesson_id: lessonId ? parseInt(lessonId) : null,
+                    mode: currentMode,
+                    work_minutes: work,
+                    break_minutes: brk,
+                    started_at: timerStartedAt,
+                    ended_at: endedAt,
+                    created_at: new Date().toISOString()
+                });
+                
+                timerPhase = 'work';
+                timerSeconds = work * 60;
+                timerStartedAt = null;
+                const phaseEl = document.getElementById('timerPhase');
+                if (phaseEl) phaseEl.textContent = 'WORK';
+                updateTimerDisplay();
+                
+                showToast(t('sessionSaved'));
+                loadPomodoroHistory();
+            }
+        }
+        
+        // ==================== INITIALIZATION ====================
+        async function init() {
+            await db.init();
+            render();
+        }
+        
+        init();
+    </script>
 </body>
 </html>
