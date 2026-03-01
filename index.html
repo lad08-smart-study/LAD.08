@@ -1,0 +1,1686 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP="lokad08"
+echo "==> Creating $APP ..."
+rm -rf "$APP"
+mkdir -p "$APP"
+cd "$APP"
+
+# ---------------------------
+# Root package.json (monorepo)
+# ---------------------------
+cat > package.json <<'JSON'
+{
+  "name": "lokad08",
+  "private": true,
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "dev": "npm -w server run dev & npm -w client run dev",
+    "dev:win": "start cmd /c \"npm -w server run dev\" && start cmd /c \"npm -w client run dev\"",
+    "build": "npm -w client run build",
+    "start": "npm -w server run start"
+  }
+}
+JSON
+
+# ===========================
+# SERVER (Express + SQLite)
+# ===========================
+mkdir -p server
+cat > server/package.json <<'JSON'
+{
+  "name": "lokad08-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.7"
+  }
+}
+JSON
+
+mkdir -p server/src
+cat > server/src/db.js <<'JS'
+import sqlite3 from "sqlite3";
+import path from "path";
+import fs from "fs";
+
+sqlite3.verbose();
+
+const dataDir = path.join(process.cwd(), "server", "data");
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+const dbPath = path.join(dataDir, "lokad08.sqlite");
+export const db = new sqlite3.Database(dbPath);
+
+export function run(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) reject(err);
+      else resolve({ lastID: this.lastID, changes: this.changes });
+    });
+  });
+}
+
+export function get(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
+
+export function all(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows);
+    });
+  });
+}
+
+export async function initDb() {
+  await run(`PRAGMA foreign_keys = ON;`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT,
+      year INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS units (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS subjects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      unit_id INTEGER NULL,
+      title TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(unit_id) REFERENCES units(id) ON DELETE SET NULL
+    );
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS lessons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      subject_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'not_started',
+      content_text TEXT,
+      done_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+    );
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS pomodoro_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      lesson_id INTEGER NULL,
+      mode TEXT NOT NULL,         -- 25_5 or 50_10
+      work_minutes INTEGER NOT NULL,
+      break_minutes INTEGER NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
+    );
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      lesson_id INTEGER NOT NULL,
+      due_date TEXT NOT NULL,    -- YYYY-MM-DD
+      done INTEGER NOT NULL DEFAULT 0,
+      done_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(user_id, lesson_id, due_date),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+    );
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS planner_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER UNIQUE NOT NULL,
+      free_hours_mon REAL DEFAULT 2,
+      free_hours_tue REAL DEFAULT 2,
+      free_hours_wed REAL DEFAULT 2,
+      free_hours_thu REAL DEFAULT 2,
+      free_hours_fri REAL DEFAULT 2,
+      free_hours_sat REAL DEFAULT 3,
+      free_hours_sun REAL DEFAULT 3,
+      exam_date TEXT, -- YYYY-MM-DD
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS planner_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      date TEXT NOT NULL,         -- YYYY-MM-DD
+      kind TEXT NOT NULL,         -- study | mcq | review
+      minutes INTEGER NOT NULL,
+      title TEXT,
+      ref_lesson_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(ref_lesson_id) REFERENCES lessons(id) ON DELETE SET NULL
+    );
+  `);
+}
+JS
+
+cat > server/src/auth.js <<'JS'
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import { get } from "./db.js";
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+const COOKIE_NAME = "lokad08_token";
+
+export function signToken(payload) {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "14d" });
+}
+
+export function setAuthCookie(res, token) {
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: false, // set true behind HTTPS
+    maxAge: 14 * 24 * 60 * 60 * 1000
+  });
+}
+
+export function clearAuthCookie(res) {
+  res.clearCookie(COOKIE_NAME);
+}
+
+export function requireAuth(req, res, next) {
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return res.status(401).json({ error: "UNAUTHORIZED" });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: "UNAUTHORIZED" });
+  }
+}
+
+export async function verifyPassword(email, password) {
+  const user = await get("SELECT * FROM users WHERE email = ?", [email]);
+  if (!user) return null;
+  const ok = await bcrypt.compare(password, user.password_hash);
+  if (!ok) return null;
+  return user;
+}
+
+export async function hashPassword(password) {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
+}
+JS
+
+cat > server/src/utils.js <<'JS'
+export function todayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function addDaysISO(dateISO, days) {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+JS
+
+cat > server/src/index.js <<'JS'
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import { initDb, run, get, all } from "./db.js";
+import { requireAuth, signToken, setAuthCookie, clearAuthCookie, verifyPassword, hashPassword } from "./auth.js";
+import { todayISO, addDaysISO, clamp } from "./utils.js";
+
+const app = express();
+const PORT = process.env.PORT || 4000;
+
+await initDb();
+
+app.use(express.json({ limit: "2mb" }));
+app.use(cookieParser());
+
+app.use(cors({
+  origin: ["http://localhost:5173"],
+  credentials: true
+}));
+
+app.get("/api/health", (req, res) => res.json({ ok: true }));
+
+// ---------------------------
+// AUTH
+// ---------------------------
+app.post("/api/auth/register", async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password || password.length < 6) {
+    return res.status(400).json({ error: "INVALID_INPUT" });
+  }
+  const existing = await get("SELECT id FROM users WHERE email = ?", [email]);
+  if (existing) return res.status(409).json({ error: "EMAIL_EXISTS" });
+
+  const password_hash = await hashPassword(password);
+  const r = await run("INSERT INTO users (email, password_hash) VALUES (?, ?)", [email, password_hash]);
+  const token = signToken({ id: r.lastID, email });
+  setAuthCookie(res, token);
+  return res.json({ ok: true });
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: "INVALID_INPUT" });
+  const user = await verifyPassword(email, password);
+  if (!user) return res.status(401).json({ error: "BAD_CREDENTIALS" });
+  const token = signToken({ id: user.id, email: user.email });
+  setAuthCookie(res, token);
+  return res.json({ ok: true });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  clearAuthCookie(res);
+  res.json({ ok: true });
+});
+
+app.get("/api/me", requireAuth, async (req, res) => {
+  const user = await get("SELECT id, email, name, year, created_at FROM users WHERE id = ?", [req.user.id]);
+  res.json({ user });
+});
+
+app.post("/api/me/profile", requireAuth, async (req, res) => {
+  const { name, year } = req.body || {};
+  const y = year == null ? null : clamp(Number(year), 1, 6);
+  await run("UPDATE users SET name = ?, year = ? WHERE id = ?", [name || null, y, req.user.id]);
+  const user = await get("SELECT id, email, name, year FROM users WHERE id = ?", [req.user.id]);
+  res.json({ user });
+});
+
+// ---------------------------
+// CRUD: Units
+// ---------------------------
+app.get("/api/units", requireAuth, async (req, res) => {
+  const rows = await all("SELECT * FROM units WHERE user_id = ? ORDER BY id DESC", [req.user.id]);
+  res.json({ units: rows });
+});
+
+app.post("/api/units", requireAuth, async (req, res) => {
+  const { title } = req.body || {};
+  if (!title?.trim()) return res.status(400).json({ error: "INVALID_INPUT" });
+  const r = await run("INSERT INTO units (user_id, title) VALUES (?, ?)", [req.user.id, title.trim()]);
+  const unit = await get("SELECT * FROM units WHERE id = ?", [r.lastID]);
+  res.json({ unit });
+});
+
+app.put("/api/units/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const { title } = req.body || {};
+  await run("UPDATE units SET title = ? WHERE id = ? AND user_id = ?", [title?.trim() || "", id, req.user.id]);
+  const unit = await get("SELECT * FROM units WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  res.json({ unit });
+});
+
+app.delete("/api/units/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  await run("DELETE FROM units WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  res.json({ ok: true });
+});
+
+// ---------------------------
+// CRUD: Subjects (unit_id can be NULL)
+// ---------------------------
+app.get("/api/subjects", requireAuth, async (req, res) => {
+  const rows = await all(
+    "SELECT * FROM subjects WHERE user_id = ? ORDER BY id DESC",
+    [req.user.id]
+  );
+  res.json({ subjects: rows });
+});
+
+app.post("/api/subjects", requireAuth, async (req, res) => {
+  const { title, unit_id } = req.body || {};
+  if (!title?.trim()) return res.status(400).json({ error: "INVALID_INPUT" });
+  const uid = unit_id === null || unit_id === undefined || unit_id === "" ? null : Number(unit_id);
+  const r = await run("INSERT INTO subjects (user_id, unit_id, title) VALUES (?, ?, ?)", [req.user.id, uid, title.trim()]);
+  const subject = await get("SELECT * FROM subjects WHERE id = ?", [r.lastID]);
+  res.json({ subject });
+});
+
+app.put("/api/subjects/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const { title, unit_id } = req.body || {};
+  const uid = unit_id === null || unit_id === undefined || unit_id === "" ? null : Number(unit_id);
+  await run(
+    "UPDATE subjects SET title = ?, unit_id = ? WHERE id = ? AND user_id = ?",
+    [title?.trim() || "", uid, id, req.user.id]
+  );
+  const subject = await get("SELECT * FROM subjects WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  res.json({ subject });
+});
+
+app.delete("/api/subjects/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  await run("DELETE FROM subjects WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  res.json({ ok: true });
+});
+
+// ---------------------------
+// CRUD: Lessons (must belong to a Subject)
+// status: not_started | studying | done
+// content_text supported now (PDF later)
+// ---------------------------
+app.get("/api/lessons", requireAuth, async (req, res) => {
+  const rows = await all(
+    "SELECT * FROM lessons WHERE user_id = ? ORDER BY id DESC",
+    [req.user.id]
+  );
+  res.json({ lessons: rows });
+});
+
+app.post("/api/lessons", requireAuth, async (req, res) => {
+  const { subject_id, title } = req.body || {};
+  const sid = Number(subject_id);
+  if (!sid || !title?.trim()) return res.status(400).json({ error: "INVALID_INPUT" });
+  const subj = await get("SELECT id FROM subjects WHERE id = ? AND user_id = ?", [sid, req.user.id]);
+  if (!subj) return res.status(404).json({ error: "SUBJECT_NOT_FOUND" });
+
+  const r = await run(
+    "INSERT INTO lessons (user_id, subject_id, title, status) VALUES (?, ?, ?, 'not_started')",
+    [req.user.id, sid, title.trim()]
+  );
+  const lesson = await get("SELECT * FROM lessons WHERE id = ?", [r.lastID]);
+  res.json({ lesson });
+});
+
+app.put("/api/lessons/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const { title, status, content_text, subject_id } = req.body || {};
+  const allowed = new Set(["not_started", "studying", "done"]);
+  const st = allowed.has(status) ? status : undefined;
+
+  // optionally move between subjects (still must be user's)
+  let sid = null;
+  if (subject_id !== undefined) {
+    sid = Number(subject_id);
+    const subj = await get("SELECT id FROM subjects WHERE id = ? AND user_id = ?", [sid, req.user.id]);
+    if (!subj) return res.status(404).json({ error: "SUBJECT_NOT_FOUND" });
+  }
+
+  // If marking as done, set done_at and generate spaced repetition reviews
+  const before = await get("SELECT status, subject_id FROM lessons WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  if (!before) return res.status(404).json({ error: "LESSON_NOT_FOUND" });
+
+  let done_at = null;
+  if (st === "done" && before.status !== "done") {
+    done_at = new Date().toISOString();
+  }
+
+  await run(
+    `UPDATE lessons
+     SET title = COALESCE(?, title),
+         status = COALESCE(?, status),
+         content_text = COALESCE(?, content_text),
+         subject_id = COALESCE(?, subject_id),
+         done_at = COALESCE(?, done_at)
+     WHERE id = ? AND user_id = ?`,
+    [
+      title?.trim() || null,
+      st || null,
+      content_text === undefined ? null : (content_text ?? null),
+      sid === null ? null : sid,
+      done_at,
+      id,
+      req.user.id
+    ]
+  );
+
+  if (done_at) {
+    // spaced repetition schedule: +1, +3, +7, +14 days
+    const base = todayISO();
+    const offsets = [1, 3, 7, 14];
+    for (const o of offsets) {
+      const due = addDaysISO(base, o);
+      await run(
+        "INSERT OR IGNORE INTO reviews (user_id, lesson_id, due_date) VALUES (?, ?, ?)",
+        [req.user.id, id, due]
+      );
+    }
+  }
+
+  const lesson = await get("SELECT * FROM lessons WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  res.json({ lesson });
+});
+
+app.delete("/api/lessons/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  await run("DELETE FROM lessons WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  res.json({ ok: true });
+});
+
+// ---------------------------
+// Progress Tracking + Dashboard
+// ---------------------------
+app.get("/api/dashboard", requireAuth, async (req, res) => {
+  const total = await get("SELECT COUNT(*) as c FROM lessons WHERE user_id = ?", [req.user.id]);
+  const done = await get("SELECT COUNT(*) as c FROM lessons WHERE user_id = ? AND status = 'done'", [req.user.id]);
+
+  const today = todayISO();
+  const dueReviews = await all(
+    `SELECT r.*, l.title as lesson_title
+     FROM reviews r
+     JOIN lessons l ON l.id = r.lesson_id
+     WHERE r.user_id = ? AND r.done = 0 AND r.due_date <= ?
+     ORDER BY r.due_date ASC
+     LIMIT 50`,
+    [req.user.id, today]
+  );
+
+  // per-subject progress
+  const perSubject = await all(
+    `SELECT s.id as subject_id, s.title as subject_title,
+            SUM(CASE WHEN l.status='done' THEN 1 ELSE 0 END) as done_count,
+            COUNT(l.id) as total_count
+     FROM subjects s
+     LEFT JOIN lessons l ON l.subject_id = s.id AND l.user_id = ?
+     WHERE s.user_id = ?
+     GROUP BY s.id
+     ORDER BY s.id DESC`,
+    [req.user.id, req.user.id]
+  );
+
+  res.json({
+    totals: { total_lessons: total.c, done_lessons: done.c },
+    due_reviews: dueReviews,
+    per_subject: perSubject
+  });
+});
+
+// Mark review as done
+app.post("/api/reviews/:id/done", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const r = await get("SELECT * FROM reviews WHERE id = ? AND user_id = ?", [id, req.user.id]);
+  if (!r) return res.status(404).json({ error: "REVIEW_NOT_FOUND" });
+  await run("UPDATE reviews SET done = 1, done_at = ? WHERE id = ? AND user_id = ?", [new Date().toISOString(), id, req.user.id]);
+  res.json({ ok: true });
+});
+
+// ---------------------------
+// Pomodoro: store sessions
+// ---------------------------
+app.post("/api/pomodoro", requireAuth, async (req, res) => {
+  const { lesson_id, mode, work_minutes, break_minutes, started_at, ended_at } = req.body || {};
+  if (!mode || !work_minutes || !break_minutes || !started_at || !ended_at) {
+    return res.status(400).json({ error: "INVALID_INPUT" });
+  }
+  const lid = lesson_id ? Number(lesson_id) : null;
+  if (lid) {
+    const l = await get("SELECT id FROM lessons WHERE id = ? AND user_id = ?", [lid, req.user.id]);
+    if (!l) return res.status(404).json({ error: "LESSON_NOT_FOUND" });
+  }
+  await run(
+    `INSERT INTO pomodoro_sessions (user_id, lesson_id, mode, work_minutes, break_minutes, started_at, ended_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, lid, mode, Number(work_minutes), Number(break_minutes), started_at, ended_at]
+  );
+  res.json({ ok: true });
+});
+
+app.get("/api/pomodoro", requireAuth, async (req, res) => {
+  const rows = await all(
+    "SELECT * FROM pomodoro_sessions WHERE user_id = ? ORDER BY id DESC LIMIT 100",
+    [req.user.id]
+  );
+  res.json({ sessions: rows });
+});
+
+// ---------------------------
+// Planner (simple generator)
+// - Based on free hours/day + exam_date + remaining lessons + due reviews
+// - Creates planner_items for next 7 days
+// ---------------------------
+app.get("/api/planner/settings", requireAuth, async (req, res) => {
+  let s = await get("SELECT * FROM planner_settings WHERE user_id = ?", [req.user.id]);
+  if (!s) {
+    await run("INSERT INTO planner_settings (user_id) VALUES (?)", [req.user.id]);
+    s = await get("SELECT * FROM planner_settings WHERE user_id = ?", [req.user.id]);
+  }
+  res.json({ settings: s });
+});
+
+app.post("/api/planner/settings", requireAuth, async (req, res) => {
+  const body = req.body || {};
+  let s = await get("SELECT * FROM planner_settings WHERE user_id = ?", [req.user.id]);
+  if (!s) {
+    await run("INSERT INTO planner_settings (user_id) VALUES (?)", [req.user.id]);
+  }
+
+  const fields = ["free_hours_mon","free_hours_tue","free_hours_wed","free_hours_thu","free_hours_fri","free_hours_sat","free_hours_sun","exam_date"];
+  const updates = [];
+  const params = [];
+  for (const f of fields) {
+    if (body[f] !== undefined) {
+      updates.push(`${f} = ?`);
+      params.push(f === "exam_date" ? (body[f] || null) : Number(body[f]));
+    }
+  }
+  if (updates.length) {
+    params.push(req.user.id);
+    await run(`UPDATE planner_settings SET ${updates.join(", ")} WHERE user_id = ?`, params);
+  }
+  s = await get("SELECT * FROM planner_settings WHERE user_id = ?", [req.user.id]);
+  res.json({ settings: s });
+});
+
+function dowIndex(dateISO) {
+  const [y,m,d] = dateISO.split("-").map(Number);
+  const dt = new Date(y, m-1, d);
+  // JS: 0 Sun..6 Sat
+  return dt.getDay();
+}
+
+function freeHoursFor(settings, dow) {
+  // map Sun..Sat
+  if (dow === 1) return settings.free_hours_mon;
+  if (dow === 2) return settings.free_hours_tue;
+  if (dow === 3) return settings.free_hours_wed;
+  if (dow === 4) return settings.free_hours_thu;
+  if (dow === 5) return settings.free_hours_fri;
+  if (dow === 6) return settings.free_hours_sat;
+  return settings.free_hours_sun;
+}
+
+app.post("/api/planner/generate", requireAuth, async (req, res) => {
+  const settings = await get("SELECT * FROM planner_settings WHERE user_id = ?", [req.user.id]);
+  if (!settings) return res.status(400).json({ error: "SETTINGS_NOT_FOUND" });
+
+  const today = todayISO();
+
+  // clear next 7 days items (regenerate)
+  const end = addDaysISO(today, 7);
+  await run("DELETE FROM planner_items WHERE user_id = ? AND date >= ? AND date < ?", [req.user.id, today, end]);
+
+  // remaining lessons (not done)
+  const remaining = await all(
+    "SELECT id, title FROM lessons WHERE user_id = ? AND status != 'done' ORDER BY id ASC",
+    [req.user.id]
+  );
+
+  // due reviews for next 7 days
+  const due = await all(
+    `SELECT r.due_date, r.lesson_id, l.title as lesson_title
+     FROM reviews r JOIN lessons l ON l.id = r.lesson_id
+     WHERE r.user_id = ? AND r.done = 0 AND r.due_date >= ? AND r.due_date < ?
+     ORDER BY r.due_date ASC`,
+    [req.user.id, today, end]
+  );
+
+  // Simple strategy:
+  // - Every day: allocate minutes = free_hours * 60
+  // - Reserve up to 20% for reviews (if any), 20% for MCQ, rest study
+  // - Study blocks: 50min chunks (or leftover)
+  // - Review blocks: 25min chunks
+  // - MCQ blocks: 25min chunks
+  const remainQueue = [...remaining];
+  const dueByDate = new Map();
+  for (const r of due) {
+    if (!dueByDate.has(r.due_date)) dueByDate.set(r.due_date, []);
+    dueByDate.get(r.due_date).push(r);
+  }
+
+  for (let i=0; i<7; i++) {
+    const date = addDaysISO(today, i);
+    const dow = dowIndex(date);
+    const freeHours = Number(freeHoursFor(settings, dow) || 0);
+    let minutes = Math.max(0, Math.round(freeHours * 60));
+
+    if (minutes === 0) continue;
+
+    const reviewsToday = dueByDate.get(date) || [];
+    const hasReviews = reviewsToday.length > 0;
+
+    let reviewBudget = hasReviews ? Math.round(minutes * 0.2) : 0;
+    let mcqBudget = Math.round(minutes * 0.2);
+    let studyBudget = minutes - reviewBudget - mcqBudget;
+    if (studyBudget < 0) studyBudget = 0;
+
+    // Add review blocks
+    while (reviewBudget >= 25 && reviewsToday.length) {
+      const r = reviewsToday.shift();
+      await run(
+        "INSERT INTO planner_items (user_id, date, kind, minutes, title, ref_lesson_id) VALUES (?, ?, 'review', 25, ?, ?)",
+        [req.user.id, date, `Review: ${r.lesson_title}`, r.lesson_id]
+      );
+      reviewBudget -= 25;
+    }
+    if (reviewBudget > 0 && reviewsToday.length) {
+      const r = reviewsToday.shift();
+      await run(
+        "INSERT INTO planner_items (user_id, date, kind, minutes, title, ref_lesson_id) VALUES (?, ?, 'review', ?, ?, ?)",
+        [req.user.id, date, reviewBudget, `Review: ${r.lesson_title}`, r.lesson_id]
+      );
+      reviewBudget = 0;
+    }
+
+    // Add MCQ blocks
+    while (mcqBudget >= 25) {
+      await run(
+        "INSERT INTO planner_items (user_id, date, kind, minutes, title) VALUES (?, ?, 'mcq', 25, ?)",
+        [req.user.id, date, "MCQ Practice"]
+      );
+      mcqBudget -= 25;
+    }
+    if (mcqBudget > 0) {
+      await run(
+        "INSERT INTO planner_items (user_id, date, kind, minutes, title) VALUES (?, ?, 'mcq', ?, ?)",
+        [req.user.id, date, mcqBudget, "MCQ Practice"]
+      );
+      mcqBudget = 0;
+    }
+
+    // Add Study blocks (50-min chunks, attach remaining lessons)
+    while (studyBudget > 0 && remainQueue.length) {
+      const chunk = Math.min(50, studyBudget);
+      const lesson = remainQueue[0];
+      await run(
+        "INSERT INTO planner_items (user_id, date, kind, minutes, title, ref_lesson_id) VALUES (?, ?, 'study', ?, ?, ?)",
+        [req.user.id, date, chunk, `Study: ${lesson.title}`, lesson.id]
+      );
+      studyBudget -= chunk;
+      // once we scheduled at least 50 minutes, move to next lesson
+      if (chunk >= 50) remainQueue.shift();
+    }
+  }
+
+  const items = await all(
+    "SELECT * FROM planner_items WHERE user_id = ? AND date >= ? AND date < ? ORDER BY date ASC, id ASC",
+    [req.user.id, today, end]
+  );
+
+  res.json({ ok: true, items });
+});
+
+app.get("/api/planner/week", requireAuth, async (req, res) => {
+  const today = todayISO();
+  const end = addDaysISO(today, 7);
+  const items = await all(
+    "SELECT * FROM planner_items WHERE user_id = ? AND date >= ? AND date < ? ORDER BY date ASC, id ASC",
+    [req.user.id, today, end]
+  );
+  res.json({ items, from: today, to_exclusive: end });
+});
+
+app.listen(PORT, () => {
+  console.log(`LOK.A.D.08 server running on http://localhost:${PORT}`);
+});
+JS
+
+cat > server/.env <<'ENV'
+JWT_SECRET=change_me_in_production
+PORT=4000
+ENV
+
+# ===========================
+# CLIENT (Vite + React)
+# ===========================
+mkdir -p client
+cat > client/package.json <<'JSON'
+{
+  "name": "lokad08-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 5173"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.2"
+  }
+}
+JSON
+
+cat > client/vite.config.js <<'JS'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: { port: 5173 }
+});
+JS
+
+mkdir -p client/src
+
+cat > client/src/i18n.js <<'JS'
+export const LANGS = ["fr", "ar", "en"];
+
+export const dict = {
+  fr: {
+    appName: "LOK.A.D.08",
+    login: "Connexion",
+    register: "Créer un compte",
+    email: "Email",
+    password: "Mot de passe",
+    logout: "Déconnexion",
+    profile: "Profil",
+    name: "Nom",
+    year: "Année (1-6)",
+    save: "Enregistrer",
+    dashboard: "Tableau de bord",
+    workspace: "Workspace",
+    units: "Unités",
+    subjects: "Matières",
+    lessons: "Leçons",
+    planner: "Planner",
+    pomodoro: "Pomodoro",
+    progress: "Progression",
+    add: "Ajouter",
+    title: "Titre",
+    standaloneSubject: "Matière indépendante",
+    unitOptional: "Unité (optionnel)",
+    subjectRequired: "Matière (obligatoire)",
+    status: "Statut",
+    not_started: "Pas commencé",
+    studying: "En cours",
+    done: "Terminé",
+    content: "Contenu (texte)",
+    update: "Mettre à jour",
+    delete: "Supprimer",
+    generate: "Générer",
+    freeHours: "Heures libres",
+    examDate: "Date d'examen",
+    dueToday: "À réviser aujourd'hui",
+    markDone: "Marquer comme fait",
+    start: "Démarrer",
+    stop: "Arrêter",
+    mode: "Mode",
+    sessionSaved: "Session enregistrée",
+    weeklyPlan: "Plan de 7 jours"
+  },
+  en: {
+    appName: "LOK.A.D.08",
+    login: "Login",
+    register: "Create account",
+    email: "Email",
+    password: "Password",
+    logout: "Logout",
+    profile: "Profile",
+    name: "Name",
+    year: "Year (1-6)",
+    save: "Save",
+    dashboard: "Dashboard",
+    workspace: "Workspace",
+    units: "Units",
+    subjects: "Subjects",
+    lessons: "Lessons",
+    planner: "Planner",
+    pomodoro: "Pomodoro",
+    progress: "Progress",
+    add: "Add",
+    title: "Title",
+    standaloneSubject: "Standalone subject",
+    unitOptional: "Unit (optional)",
+    subjectRequired: "Subject (required)",
+    status: "Status",
+    not_started: "Not started",
+    studying: "Studying",
+    done: "Done",
+    content: "Content (text)",
+    update: "Update",
+    delete: "Delete",
+    generate: "Generate",
+    freeHours: "Free hours",
+    examDate: "Exam date",
+    dueToday: "Due reviews",
+    markDone: "Mark done",
+    start: "Start",
+    stop: "Stop",
+    mode: "Mode",
+    sessionSaved: "Session saved",
+    weeklyPlan: "7-day plan"
+  },
+  ar: {
+    appName: "LOK.A.D.08",
+    login: "تسجيل الدخول",
+    register: "إنشاء حساب",
+    email: "البريد الإلكتروني",
+    password: "كلمة المرور",
+    logout: "تسجيل الخروج",
+    profile: "الملف الشخصي",
+    name: "الاسم",
+    year: "السنة (1-6)",
+    save: "حفظ",
+    dashboard: "لوحة التحكم",
+    workspace: "مساحة المستخدم",
+    units: "الوحدات",
+    subjects: "المواد",
+    lessons: "الدروس",
+    planner: "المخطط الأسبوعي",
+    pomodoro: "بومودورو",
+    progress: "التقدم",
+    add: "إضافة",
+    title: "العنوان",
+    standaloneSubject: "مادة مستقلة",
+    unitOptional: "الوحدة (اختياري)",
+    subjectRequired: "المادة (إجباري)",
+    status: "الحالة",
+    not_started: "لم يبدأ",
+    studying: "يدرس",
+    done: "منجز",
+    content: "محتوى الدرس (نص)",
+    update: "تحديث",
+    delete: "حذف",
+    generate: "توليد",
+    freeHours: "ساعات الفراغ",
+    examDate: "تاريخ الامتحان",
+    dueToday: "مراجعات مستحقة اليوم",
+    markDone: "تمت المراجعة",
+    start: "ابدأ",
+    stop: "أوقف",
+    mode: "النمط",
+    sessionSaved: "تم حفظ الجلسة",
+    weeklyPlan: "خطة 7 أيام"
+  }
+};
+
+export function t(lang, key) {
+  return (dict[lang] && dict[lang][key]) || dict.en[key] || key;
+}
+
+export function isRTL(lang) {
+  return lang === "ar";
+}
+JS
+
+cat > client/src/api.js <<'JS'
+const API = "http://localhost:4000/api";
+
+async function req(path, opts = {}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+    credentials: "include"
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data?.error || "REQUEST_FAILED"), { status: res.status, data });
+  return data;
+}
+
+export const api = {
+  health: () => req("/health"),
+  register: (email, password) => req("/auth/register", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: (email, password) => req("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  logout: () => req("/auth/logout", { method: "POST" }),
+  me: () => req("/me"),
+  saveProfile: (name, year) => req("/me/profile", { method: "POST", body: JSON.stringify({ name, year }) }),
+
+  units: () => req("/units"),
+  addUnit: (title) => req("/units", { method: "POST", body: JSON.stringify({ title }) }),
+  updUnit: (id, title) => req(`/units/${id}`, { method: "PUT", body: JSON.stringify({ title }) }),
+  delUnit: (id) => req(`/units/${id}`, { method: "DELETE" }),
+
+  subjects: () => req("/subjects"),
+  addSubject: (title, unit_id) => req("/subjects", { method: "POST", body: JSON.stringify({ title, unit_id }) }),
+  updSubject: (id, title, unit_id) => req(`/subjects/${id}`, { method: "PUT", body: JSON.stringify({ title, unit_id }) }),
+  delSubject: (id) => req(`/subjects/${id}`, { method: "DELETE" }),
+
+  lessons: () => req("/lessons"),
+  addLesson: (subject_id, title) => req("/lessons", { method: "POST", body: JSON.stringify({ subject_id, title }) }),
+  updLesson: (id, patch) => req(`/lessons/${id}`, { method: "PUT", body: JSON.stringify(patch) }),
+  delLesson: (id) => req(`/lessons/${id}`, { method: "DELETE" }),
+
+  dashboard: () => req("/dashboard"),
+  reviewDone: (id) => req(`/reviews/${id}/done`, { method: "POST" }),
+
+  pomodoroAdd: (payload) => req("/pomodoro", { method: "POST", body: JSON.stringify(payload) }),
+  pomodoroList: () => req("/pomodoro"),
+
+  plannerSettings: () => req("/planner/settings"),
+  plannerSettingsSave: (payload) => req("/planner/settings", { method: "POST", body: JSON.stringify(payload) }),
+  plannerGenerate: () => req("/planner/generate", { method: "POST" }),
+  plannerWeek: () => req("/planner/week")
+};
+JS
+
+cat > client/src/styles.css <<'CSS'
+:root{
+  --bg:#0b1220;
+  --card:#101a30;
+  --text:#e8eefc;
+  --muted:#a9b7d6;
+  --line:#223155;
+  --accent:#6ea8fe;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text)}
+a{color:var(--accent);text-decoration:none}
+.container{max-width:1100px;margin:0 auto;padding:18px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.btn{background:var(--accent);color:#061022;border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer}
+.btn.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn.danger{background:#ff6b6b;color:#140000}
+.input, select, textarea{
+  width:100%; padding:10px 12px;border-radius:10px;
+  border:1px solid var(--line);background:#0a1326;color:var(--text)
+}
+label{display:block;margin:10px 0 6px;color:var(--muted);font-size:13px}
+.nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.badge{padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:12px}
+.h1{font-size:24px;margin:0 0 10px}
+.h2{font-size:18px;margin:0 0 10px;color:var(--text)}
+.small{color:var(--muted);font-size:12px}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border-bottom:1px solid var(--line);padding:8px;text-align:left}
+.kpi{display:flex;gap:10px;align-items:baseline}
+.kpi strong{font-size:22px}
+hr{border:0;border-top:1px solid var(--line);margin:12px 0}
+CSS
+
+cat > client/src/main.jsx <<'JSX'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import "./styles.css";
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App/>
+  </React.StrictMode>
+);
+JSX
+
+cat > client/index.html <<'HTML'
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LOK.A.D.08</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+HTML
+
+cat > client/src/App.jsx <<'JSX'
+import React, { useEffect, useMemo, useState } from "react";
+import { api } from "./api.js";
+import { LANGS, t, isRTL } from "./i18n.js";
+
+function useLang() {
+  const [lang, setLang] = useState(() => localStorage.getItem("lok_lang") || "fr");
+  useEffect(() => { localStorage.setItem("lok_lang", lang); }, [lang]);
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = isRTL(lang) ? "rtl" : "ltr";
+  }, [lang]);
+  return { lang, setLang };
+}
+
+function Nav({ lang, setLang, me, onLogout, page, setPage }) {
+  return (
+    <div className="card nav" style={{justifyContent:"space-between"}}>
+      <div className="nav">
+        <span className="badge">{t(lang,"appName")}</span>
+        {me && (
+          <>
+            <a href="#" onClick={(e)=>{e.preventDefault();setPage("dashboard");}}>{t(lang,"dashboard")}</a>
+            <a href="#" onClick={(e)=>{e.preventDefault();setPage("workspace");}}>{t(lang,"workspace")}</a>
+            <a href="#" onClick={(e)=>{e.preventDefault();setPage("planner");}}>{t(lang,"planner")}</a>
+            <a href="#" onClick={(e)=>{e.preventDefault();setPage("pomodoro");}}>{t(lang,"pomodoro")}</a>
+            <a href="#" onClick={(e)=>{e.preventDefault();setPage("profile");}}>{t(lang,"profile")}</a>
+          </>
+        )}
+      </div>
+      <div className="nav">
+        <select className="input" style={{width:140}} value={lang} onChange={e=>setLang(e.target.value)}>
+          {LANGS.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+        </select>
+        {me && <button className="btn secondary" onClick={onLogout}>{t(lang,"logout")}</button>}
+      </div>
+    </div>
+  );
+}
+
+function Auth({ lang, onAuthed }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState("login");
+  const [err, setErr] = useState("");
+
+  async function submit() {
+    setErr("");
+    try {
+      if (mode === "login") await api.login(email, password);
+      else await api.register(email, password);
+      onAuthed();
+    } catch (e) {
+      setErr(String(e.data?.error || e.message));
+    }
+  }
+
+  return (
+    <div className="container">
+      <div className="card" style={{maxWidth:520, margin:"0 auto"}}>
+        <h1 className="h1">{mode === "login" ? t(lang,"login") : t(lang,"register")}</h1>
+        <label>{t(lang,"email")}</label>
+        <input className="input" value={email} onChange={e=>setEmail(e.target.value)} />
+        <label>{t(lang,"password")}</label>
+        <input className="input" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+        {err && <p className="small" style={{color:"#ffb4b4"}}>{err}</p>}
+        <div className="row" style={{marginTop:12}}>
+          <button className="btn" onClick={submit}>{mode === "login" ? t(lang,"login") : t(lang,"register")}</button>
+          <button className="btn secondary" onClick={()=>setMode(mode==="login"?"register":"login")}>
+            {mode === "login" ? t(lang,"register") : t(lang,"login")}
+          </button>
+        </div>
+        <p className="small" style={{marginTop:12}}>
+          FR افتراضيًا ✅ — يمكنك التحويل إلى AR (RTL) أو EN من الأعلى.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Profile({ lang, me, refreshMe }) {
+  const [name, setName] = useState(me?.name || "");
+  const [year, setYear] = useState(me?.year || "");
+  const [msg, setMsg] = useState("");
+
+  async function save() {
+    setMsg("");
+    await api.saveProfile(name, year ? Number(year) : null);
+    setMsg("OK");
+    refreshMe();
+  }
+
+  return (
+    <div className="container">
+      <div className="card" style={{maxWidth:700}}>
+        <h2 className="h2">{t(lang,"profile")}</h2>
+        <label>{t(lang,"name")}</label>
+        <input className="input" value={name} onChange={e=>setName(e.target.value)} />
+        <label>{t(lang,"year")}</label>
+        <input className="input" value={year} onChange={e=>setYear(e.target.value)} />
+        <div className="row" style={{marginTop:12}}>
+          <button className="btn" onClick={save}>{t(lang,"save")}</button>
+          {msg && <span className="badge">{msg}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Workspace({ lang }) {
+  const [units, setUnits] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [lessons, setLessons] = useState([]);
+
+  const [uTitle, setUTitle] = useState("");
+  const [sTitle, setSTitle] = useState("");
+  const [sUnit, setSUnit] = useState("");
+  const [lTitle, setLTitle] = useState("");
+  const [lSubject, setLSubject] = useState("");
+
+  async function load() {
+    const [u, s, l] = await Promise.all([api.units(), api.subjects(), api.lessons()]);
+    setUnits(u.units);
+    setSubjects(s.subjects);
+    setLessons(l.lessons);
+  }
+  useEffect(() => { load(); }, []);
+
+  const unitsById = useMemo(() => new Map(units.map(x => [x.id, x])), [units]);
+  const subjectsById = useMemo(() => new Map(subjects.map(x => [x.id, x])), [subjects]);
+
+  async function addUnit() { await api.addUnit(uTitle); setUTitle(""); await load(); }
+  async function addSubject() {
+    const unit_id = sUnit === "" ? null : Number(sUnit);
+    await api.addSubject(sTitle, unit_id);
+    setSTitle(""); setSUnit(""); await load();
+  }
+  async function addLesson() {
+    await api.addLesson(Number(lSubject), lTitle);
+    setLTitle(""); setLSubject(""); await load();
+  }
+
+  async function updLesson(id, patch) { await api.updLesson(id, patch); await load(); }
+
+  return (
+    <div className="container">
+      <div className="row">
+        <div className="card" style={{flex:"1 1 320px"}}>
+          <h2 className="h2">{t(lang,"units")}</h2>
+          <label>{t(lang,"title")}</label>
+          <input className="input" value={uTitle} onChange={e=>setUTitle(e.target.value)} />
+          <button className="btn" style={{marginTop:10}} onClick={addUnit}>{t(lang,"add")}</button>
+          <hr/>
+          <table className="table">
+            <thead><tr><th>ID</th><th>{t(lang,"title")}</th><th></th></tr></thead>
+            <tbody>
+              {units.map(u => (
+                <tr key={u.id}>
+                  <td>{u.id}</td>
+                  <td>
+                    <input className="input" defaultValue={u.title} onBlur={(e)=>api.updUnit(u.id, e.target.value).then(load)} />
+                  </td>
+                  <td><button className="btn danger" onClick={()=>api.delUnit(u.id).then(load)}>{t(lang,"delete")}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card" style={{flex:"1 1 360px"}}>
+          <h2 className="h2">{t(lang,"subjects")}</h2>
+          <label>{t(lang,"title")}</label>
+          <input className="input" value={sTitle} onChange={e=>setSTitle(e.target.value)} />
+          <label>{t(lang,"unitOptional")}</label>
+          <select className="input" value={sUnit} onChange={e=>setSUnit(e.target.value)}>
+            <option value="">{t(lang,"standaloneSubject")}</option>
+            {units.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
+          </select>
+          <button className="btn" style={{marginTop:10}} onClick={addSubject}>{t(lang,"add")}</button>
+          <hr/>
+          <table className="table">
+            <thead><tr><th>ID</th><th>{t(lang,"title")}</th><th>{t(lang,"unitOptional")}</th><th></th></tr></thead>
+            <tbody>
+              {subjects.map(s => (
+                <tr key={s.id}>
+                  <td>{s.id}</td>
+                  <td>
+                    <input className="input" defaultValue={s.title} onBlur={(e)=>api.updSubject(s.id, e.target.value, s.unit_id).then(load)} />
+                  </td>
+                  <td>
+                    <select className="input" value={s.unit_id ?? ""} onChange={(e)=>api.updSubject(s.id, s.title, e.target.value===""?null:Number(e.target.value)).then(load)}>
+                      <option value="">{t(lang,"standaloneSubject")}</option>
+                      {units.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
+                    </select>
+                  </td>
+                  <td><button className="btn danger" onClick={()=>api.delSubject(s.id).then(load)}>{t(lang,"delete")}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="small">✅ Subject يمكن أن يكون داخل Unit أو مستقل (unit_id = NULL). Lesson لازم يتبع Subject دائمًا.</p>
+        </div>
+
+        <div className="card" style={{flex:"1 1 380px"}}>
+          <h2 className="h2">{t(lang,"lessons")}</h2>
+          <label>{t(lang,"title")}</label>
+          <input className="input" value={lTitle} onChange={e=>setLTitle(e.target.value)} />
+          <label>{t(lang,"subjectRequired")}</label>
+          <select className="input" value={lSubject} onChange={e=>setLSubject(e.target.value)}>
+            <option value="">--</option>
+            {subjects.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.title} {s.unit_id ? `(${unitsById.get(s.unit_id)?.title || "Unit"})` : "(Standalone)"}
+              </option>
+            ))}
+          </select>
+          <button className="btn" style={{marginTop:10}} onClick={addLesson} disabled={!lSubject}>{t(lang,"add")}</button>
+          <hr/>
+          <table className="table">
+            <thead><tr><th>ID</th><th>{t(lang,"title")}</th><th>{t(lang,"status")}</th><th></th></tr></thead>
+            <tbody>
+              {lessons.map(l => (
+                <tr key={l.id}>
+                  <td>{l.id}</td>
+                  <td>
+                    <input className="input" defaultValue={l.title} onBlur={(e)=>updLesson(l.id, { title: e.target.value })} />
+                    <div className="small">
+                      {subjectsById.get(l.subject_id)?.title || "Subject"} • {subjectsById.get(l.subject_id)?.unit_id ? (unitsById.get(subjectsById.get(l.subject_id)?.unit_id)?.title || "Unit") : "Standalone"}
+                    </div>
+                    <details style={{marginTop:6}}>
+                      <summary className="small">{t(lang,"content")}</summary>
+                      <textarea className="input" rows="4" defaultValue={l.content_text || ""} onBlur={(e)=>updLesson(l.id, { content_text: e.target.value })}/>
+                    </details>
+                  </td>
+                  <td>
+                    <select className="input" value={l.status} onChange={(e)=>updLesson(l.id, { status: e.target.value })}>
+                      <option value="not_started">{t(lang,"not_started")}</option>
+                      <option value="studying">{t(lang,"studying")}</option>
+                      <option value="done">{t(lang,"done")}</option>
+                    </select>
+                    {l.status === "done" && <span className="badge">Spaced ✅ (+1,+3,+7,+14)</span>}
+                  </td>
+                  <td><button className="btn danger" onClick={()=>api.delLesson(l.id).then(load)}>{t(lang,"delete")}</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ lang }) {
+  const [data, setData] = useState(null);
+  async function load() { setData(await api.dashboard()); }
+  useEffect(()=>{ load(); }, []);
+
+  if (!data) return <div className="container"><div className="card">...</div></div>;
+
+  const total = data.totals.total_lessons || 0;
+  const done = data.totals.done_lessons || 0;
+  const pct = total ? Math.round((done/total)*100) : 0;
+
+  return (
+    <div className="container">
+      <div className="row">
+        <div className="card" style={{flex:"1 1 260px"}}>
+          <h2 className="h2">{t(lang,"progress")}</h2>
+          <div className="kpi"><strong>{pct}%</strong><span className="badge">{done}/{total}</span></div>
+          <p className="small">نسبة التقدم الكلية بناءً على الدروس المنجزة.</p>
+        </div>
+
+        <div className="card" style={{flex:"2 1 520px"}}>
+          <h2 className="h2">{t(lang,"dueToday")}</h2>
+          {data.due_reviews.length === 0 ? (
+            <p className="small">لا توجد مراجعات مستحقة الآن ✅</p>
+          ) : (
+            <table className="table">
+              <thead><tr><th>Due</th><th>Lesson</th><th></th></tr></thead>
+              <tbody>
+                {data.due_reviews.map(r => (
+                  <tr key={r.id}>
+                    <td>{r.due_date}</td>
+                    <td>{r.lesson_title}</td>
+                    <td><button className="btn" onClick={()=>api.reviewDone(r.id).then(load)}>{t(lang,"markDone")}</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="card" style={{flex:"1 1 320px"}}>
+          <h2 className="h2">{t(lang,"subjects")}</h2>
+          <table className="table">
+            <thead><tr><th>{t(lang,"title")}</th><th>{t(lang,"progress")}</th></tr></thead>
+            <tbody>
+              {data.per_subject.map(s => {
+                const p = s.total_count ? Math.round((s.done_count/s.total_count)*100) : 0;
+                return (
+                  <tr key={s.subject_id}>
+                    <td>{s.subject_title}</td>
+                    <td>{p}% <span className="small">({s.done_count}/{s.total_count})</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="small">✅ تقدم لكل مادة + عدد الدروس المنجزة/المتبقية.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Planner({ lang }) {
+  const [settings, setSettings] = useState(null);
+  const [items, setItems] = useState([]);
+  const [msg, setMsg] = useState("");
+
+  async function load() {
+    const s = await api.plannerSettings();
+    setSettings(s.settings);
+    const w = await api.plannerWeek();
+    setItems(w.items);
+  }
+  useEffect(()=>{ load(); }, []);
+
+  async function saveSettings() {
+    setMsg("");
+    await api.plannerSettingsSave(settings);
+    setMsg("OK");
+  }
+
+  async function generate() {
+    setMsg("");
+    const r = await api.plannerGenerate();
+    setItems(r.items);
+    setMsg("GENERATED");
+  }
+
+  if (!settings) return <div className="container"><div className="card">...</div></div>;
+
+  return (
+    <div className="container">
+      <div className="row">
+        <div className="card" style={{flex:"1 1 360px"}}>
+          <h2 className="h2">{t(lang,"planner")}</h2>
+          <label>{t(lang,"examDate")}</label>
+          <input className="input" value={settings.exam_date || ""} onChange={e=>setSettings({...settings, exam_date: e.target.value})} placeholder="YYYY-MM-DD" />
+          <hr/>
+          <div className="row">
+            {[
+              ["mon","Mon"],["tue","Tue"],["wed","Wed"],["thu","Thu"],["fri","Fri"],["sat","Sat"],["sun","Sun"]
+            ].map(([k, lab]) => (
+              <div key={k} style={{flex:"1 1 120px"}}>
+                <label>{t(lang,"freeHours")} • {lab}</label>
+                <input className="input" value={settings[`free_hours_${k}`] ?? 0}
+                  onChange={e=>setSettings({...settings, [`free_hours_${k}`]: Number(e.target.value)})}/>
+              </div>
+            ))}
+          </div>
+          <div className="row" style={{marginTop:12}}>
+            <button className="btn" onClick={saveSettings}>{t(lang,"save")}</button>
+            <button className="btn secondary" onClick={generate}>{t(lang,"generate")}</button>
+            {msg && <span className="badge">{msg}</span>}
+          </div>
+          <p className="small">
+            الخوارزمية هنا بسيطة لكن صحيحة عمليًا: تقسيم وقت اليوم إلى Study + MCQ + Review، وتوليد خطة 7 أيام.
+          </p>
+        </div>
+
+        <div className="card" style={{flex:"2 1 600px"}}>
+          <h2 className="h2">{t(lang,"weeklyPlan")}</h2>
+          {items.length === 0 ? (
+            <p className="small">لا يوجد عناصر بعد—اضغط {t(lang,"generate")}.</p>
+          ) : (
+            <table className="table">
+              <thead><tr><th>Date</th><th>Kind</th><th>Minutes</th><th>Title</th></tr></thead>
+              <tbody>
+                {items.map(it => (
+                  <tr key={it.id}>
+                    <td>{it.date}</td>
+                    <td>{it.kind}</td>
+                    <td>{it.minutes}</td>
+                    <td>{it.title || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="small">✅ يدمج: Study blocks + MCQ blocks + Review blocks.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Pomodoro({ lang }) {
+  const [mode, setMode] = useState("25_5");
+  const [seconds, setSeconds] = useState(25*60);
+  const [running, setRunning] = useState(false);
+  const [phase, setPhase] = useState("work"); // work | break
+  const [startedAt, setStartedAt] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [lessons, setLessons] = useState([]);
+  const [lessonId, setLessonId] = useState("");
+
+  const work = mode === "25_5" ? 25 : 50;
+  const brk = mode === "25_5" ? 5 : 10;
+
+  useEffect(() => {
+    setSeconds(work*60);
+    setPhase("work");
+    setRunning(false);
+    setStartedAt(null);
+  }, [mode]);
+
+  useEffect(() => {
+    let id = null;
+    if (running) {
+      id = setInterval(() => {
+        setSeconds(s => {
+          if (s <= 1) return 0;
+          return s - 1;
+        });
+      }, 1000);
+    }
+    return () => id && clearInterval(id);
+  }, [running]);
+
+  useEffect(() => {
+    if (!running) return;
+    if (seconds !== 0) return;
+
+    // switch phase
+    if (phase === "work") {
+      setPhase("break");
+      setSeconds(brk*60);
+    } else {
+      // full cycle ended => save session
+      const endedAt = new Date().toISOString();
+      const started = startedAt || new Date().toISOString();
+      api.pomodoroAdd({
+        lesson_id: lessonId ? Number(lessonId) : null,
+        mode,
+        work_minutes: work,
+        break_minutes: brk,
+        started_at: started,
+        ended_at: endedAt
+      }).then(() => setMsg(t(lang,"sessionSaved"))).catch(()=>{});
+      setPhase("work");
+      setSeconds(work*60);
+      setRunning(false);
+      setStartedAt(null);
+    }
+  }, [seconds, running, phase]);
+
+  useEffect(() => {
+    api.lessons().then(r => setLessons(r.lessons));
+  }, []);
+
+  function mmss(s) {
+    const m = Math.floor(s/60);
+    const ss = String(s%60).padStart(2,"0");
+    return `${m}:${ss}`;
+  }
+
+  function start() {
+    setMsg("");
+    if (!startedAt) setStartedAt(new Date().toISOString());
+    setRunning(true);
+  }
+  function stop() {
+    setRunning(false);
+  }
+
+  return (
+    <div className="container">
+      <div className="row">
+        <div className="card" style={{flex:"1 1 420px"}}>
+          <h2 className="h2">{t(lang,"pomodoro")}</h2>
+
+          <label>{t(lang,"mode")}</label>
+          <select className="input" value={mode} onChange={e=>setMode(e.target.value)}>
+            <option value="25_5">25/5</option>
+            <option value="50_10">50/10</option>
+          </select>
+
+          <label>Lesson (optional)</label>
+          <select className="input" value={lessonId} onChange={e=>setLessonId(e.target.value)}>
+            <option value="">--</option>
+            {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+          </select>
+
+          <div className="card" style={{marginTop:12}}>
+            <div className="row" style={{justifyContent:"space-between", alignItems:"center"}}>
+              <span className="badge">{phase.toUpperCase()}</span>
+              <strong style={{fontSize:32}}>{mmss(seconds)}</strong>
+            </div>
+            <div className="row" style={{marginTop:10}}>
+              <button className="btn" onClick={start} disabled={running}>{t(lang,"start")}</button>
+              <button className="btn secondary" onClick={stop} disabled={!running}>{t(lang,"stop")}</button>
+            </div>
+            {msg && <p className="small">{msg}</p>}
+          </div>
+
+          <p className="small">
+            ✅ يتم تسجيل جلسات Pomodoro في قاعدة البيانات تلقائيًا بعد اكتمال Work+Break.
+          </p>
+        </div>
+
+        <div className="card" style={{flex:"2 1 620px"}}>
+          <h2 className="h2">History</h2>
+          <PomodoroHistory />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PomodoroHistory() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => { api.pomodoroList().then(r => setRows(r.sessions)); }, []);
+  return (
+    <table className="table">
+      <thead><tr><th>ID</th><th>Mode</th><th>Work</th><th>Break</th><th>Started</th><th>Ended</th></tr></thead>
+      <tbody>
+        {rows.map(s => (
+          <tr key={s.id}>
+            <td>{s.id}</td>
+            <td>{s.mode}</td>
+            <td>{s.work_minutes}</td>
+            <td>{s.break_minutes}</td>
+            <td className="small">{s.started_at}</td>
+            <td className="small">{s.ended_at}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export default function App() {
+  const { lang, setLang } = useLang();
+  const [me, setMe] = useState(null);
+  const [page, setPage] = useState("dashboard");
+
+  async function refreshMe() {
+    try {
+      const r = await api.me();
+      setMe(r.user);
+      if (!r.user?.name || !r.user?.year) setPage("profile");
+    } catch {
+      setMe(null);
+    }
+  }
+
+  useEffect(() => { refreshMe(); }, []);
+
+  async function logout() {
+    await api.logout();
+    setMe(null);
+    setPage("dashboard");
+  }
+
+  if (!me) {
+    return (
+      <>
+        <div className="container">
+          <Nav lang={lang} setLang={setLang} me={null} onLogout={logout} page={page} setPage={setPage} />
+        </div>
+        <Auth lang={lang} onAuthed={refreshMe} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="container">
+        <Nav lang={lang} setLang={setLang} me={me} onLogout={logout} page={page} setPage={setPage} />
+      </div>
+
+      {page === "profile" && <Profile lang={lang} me={me} refreshMe={refreshMe} />}
+      {page === "dashboard" && <Dashboard lang={lang} />}
+      {page === "workspace" && <Workspace lang={lang} />}
+      {page === "planner" && <Planner lang={lang} />}
+      {page === "pomodoro" && <Pomodoro lang={lang} />}
+    </>
+  );
+}
+JSX
+
+# ---------------------------
+# Install deps
+# ---------------------------
+echo "==> Installing dependencies..."
+npm install
+npm -w server install
+npm -w client install
+
+echo ""
+echo "✅ Done."
+echo "Next:"
+echo "  cd $APP"
+echo "  npm run dev"
+echo ""
+echo "Open:"
+echo "  http://localhost:5173"
+echo ""
+echo "Notes:"
+echo "- FR is default language; switch to AR (RTL) or EN from top-right."
+echo "- Auth: Email+Password stored securely with bcrypt; session via httpOnly cookie JWT."
+echo "- Units → Subjects → Lessons with Subjects standalone supported (unit_id NULL)."
+echo "- Lesson 'done' auto-creates spaced repetition reviews: +1 +3 +7 +14 days."
+echo "- Planner generates 7-day plan: Study + MCQ + Review blocks."
+echo "- Pomodoro supports 25/5 and 50/10 and stores sessions in DB."
